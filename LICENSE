@@ -22,5 +22,17 @@ SOFTWARE.
 ---
 ACADEMIC CITATION:
 If you use this software in your research, please cite the following works:
+MIT License - Copyright (c) 2026 Tatsuki Itagaki
+Methodology & Implementation (Unified Pipeline):
+Itagaki, T. (2026). Deciphering Compositional Chaos Identifying Invariant Anchors and System Perturbations using Physics, Geometry, and Statistics.
+DOI: 10.13140/RG.2.2.21953.93284
+ResearchGate Method Page
+Theoretical Foundation (CoDA Geometry):
+Egozcue, J. J., et al. (2003). Isometric Logratio Transformations for Compositional Data Analysis.
+Mathematical Anchor (CV Asymmetry):
 Ohta, T. (2011). DOI: 10.1007/s11004-011-9332-y
-Itagaki, T (2026). DOI: 10.13140/RG.2.2.21953.93284
+
+Copyright (c) 2026 Tatsuki Itagaki. All rights reserved.
+License:
+This software is released under the MIT License.
+(The full text of the license is included in the LICENSE file.)

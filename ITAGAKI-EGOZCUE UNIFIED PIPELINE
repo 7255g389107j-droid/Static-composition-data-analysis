@@ -1,0 +1,102 @@
+# =================================================================
+# ITAGAKI-EGOZCUE UNIFIED PIPELINE (V1.2.2)
+# -----------------------------------------------------------------
+# Purpose: Absolute Basis Recovery & Orthonormal ILR Mapping
+# Framework: Poisson-Aitchison-Ohta Triple Stability Metrics
+# Author: Tatsuki Itagaki
+# Copyright (c) 2026 Tatsuki Itagaki
+# License: MIT License
+# 
+# ACADEMIC CITATION:
+# If you use this software or its logic in your research, 
+# please cite the following works:
+# Ohta, T. (2011). DOI: 10.1007/s11004-011-9332-y
+# Itagaki, T (2026). DOI: 10.13140/RG.2.2.21953.93284
+# =================================================================
+
+# --- 1. CORE ENGINE: ITAGAKI CHAOS DIAGNOSIS & BASIS ESTIMATION ---
+diagnose_chaos_v8 <- function(Dataset, lib_size = NULL) {
+  P <- as.matrix(Dataset)
+  P[P == 0] <- 1e-20  # Numerical stability for Log
+  L <- log(P)
+  n_taxa <- ncol(P)
+  
+  # Auto-calculate library size if not provided
+  if(is.null(lib_size)) {
+    lib_size <- mean(rowSums(P)) 
+    if(lib_size <= 1) lib_size <- 10000 # Default for proportions
+  }
+  
+  # A. PHYSICAL CHAOS (S_p): Poisson Noise Floor
+  obs_v <- apply(L, 2, var)
+  theo_v <- 1 / (colMeans(P) * lib_size)
+  ir <- obs_v / (theo_v + 1e-18)
+  S_p <- mean(log10(ir + 1)) 
+  
+  # B. GEOMETRIC CHAOS (S_g): Aitchison Eigen-Entropy
+  vlr <- var(L)
+  ev <- eigen(vlr)$values
+  ev <- ev[ev > 1e-10]
+  S_g <- -sum((ev/sum(ev)) * log(ev/sum(ev))) / log(length(ev))
+  
+  # C. STATISTICAL CHAOS (S_s): Ohta's CV-Asymmetry Win-Count
+  win <- numeric(n_taxa)
+  for (j in 1:n_taxa) {
+    r <- P / P[, j]
+    win[j] <- sum(apply(r, 2, function(x) sd(x)/mean(x)) < 
+                  apply(1/r, 2, function(x) sd(x)/mean(x)), na.rm=TRUE)
+  }
+  S_s <- 1 - (max(win) / (n_taxa - 1))
+  
+  # Final Chaos Index & Anchor Identification
+  chaos_idx <- (S_p + S_g + S_s) / 3
+  best_anchor_idx <- which.max(win)
+  
+  # Estimated Scale: Reconstructs Absolute Mass from the strongest anchor
+  estimated_scale <- 1 / P[, best_anchor_idx]
+  
+  cat(sprintf("\n[SYSTEM REPORT] Chaos: %.4f | Anchor: %s\n", 
+              chaos_idx, colnames(P)[best_anchor_idx]))
+  
+  return(list(Chaos_Index = chaos_idx, Estimated_Scale = estimated_scale))
+}
+
+# --- 2. BRIDGE: RECOVER ABSOLUTE BASIS GEOMETRY ---
+recover_absolute_basis <- function(Dataset, res_v8) {
+  if(res_v8$Chaos_Index > 0.7) {
+    stop(sprintf("CRITICAL CHAOS (%.4f): System is turbulent. Basis recovery failed.", res_v8$Chaos_Index))
+  }
+  return(as.matrix(Dataset) * res_v8$Estimated_Scale)
+}
+
+# --- 3. GEOMETRIC MAP: EGOZCUE ILR (Orthonormal Basis) ---
+apply_itagaki_ilr <- function(abs_data) {
+  D <- ncol(abs_data)
+  N <- nrow(abs_data)
+  L <- log(abs_data + 1e-20)
+  ilr_data <- matrix(0, nrow = N, ncol = D - 1)
+  
+  for (i in 1:(D - 1)) {
+    weight <- sqrt(i / (i + 1))
+    sub_mean <- if(i == 1) L[, 1] else rowMeans(as.matrix(L[, 1:i]))
+    ilr_data[, i] <- weight * (L[, i + 1] - sub_mean)
+  }
+  colnames(ilr_data) <- paste0("ILR_Dim_", 1:(D - 1))
+  return(ilr_data)
+}
+
+ Dataset <- Dataset
+ results <- diagnose_chaos_v8(Dataset)
+ abs_geo <- recover_absolute_basis(Dataset, results)
+ final_coords <- apply_itagaki_ilr(abs_geo)
+ pca_res <- prcomp(final_coords)
+ plot(pca_res$x[,1:2], main="Absolute-Scale PCA (Itagaki-Egozcue Pipeline)")
+
+# --- 4. EXECUTION FLOW ---
+# Usage:
+# 1. Dataset <- your_data_matrix (Proportions)
+# 2. results <- diagnose_chaos_v8(Dataset)
+# 3. abs_geo <- recover_absolute_basis(Dataset, results)
+# 4. final_coords <- apply_itagaki_ilr(abs_geo)
+# 5. pca_res <- prcomp(final_coords)
+# 6. plot(pca_res$x[,1:2], main="Absolute-Scale PCA (Itagaki-Egozcue Pipeline)")

@@ -1,0 +1,102 @@
+# =================================================================
+# ITAGAKI-EGOZCUE UNIFIED PIPELINE (V1.2.4)
+# -----------------------------------------------------------------
+# Integration: Itagaki Basis Scaling & Egozcue ILR Geometry
+# Author: Tatsuki Itagaki | Copyright (c) 2026 Tatsuki Itagaki
+# License: MIT License
+# 
+# ACADEMIC CITATION:
+# If you use this software or its logic in your research, 
+# please cite the following works:
+# Egozcue, J. J., et al. (2003). Isometric Logratio Transformations for Compositional Data Analysis.
+# Ohta, T. (2011). DOI: 10.1007/s11004-011-9332-y
+# Itagaki, T (2026). DOI: 10.13140/RG.2.2.21953.93284
+# =================================================================
+
+# --- 1. CORE ENGINE: V8 DIAGNOSIS & BASIS ESTIMATION ---
+diagnose_chaos_v8 <- function(Dataset, lib_size) {
+  P <- as.matrix(Dataset)
+  P[P == 0] <- 1e-20
+  L <- log(P)
+  n_taxa <- ncol(P)
+  
+  # A. Physics (Poisson Noise Floor)
+  obs_v <- apply(L, 2, var)
+  theo_v <- 1 / (colMeans(P) * lib_size) # Variable name synchronized
+  ir <- obs_v / (theo_v + 1e-18)
+  S_p <- mean(log10(ir + 1)) 
+  
+  # B. Geometry (Aitchison Eigen-Entropy)
+  vlr <- var(L)
+  ev <- eigen(vlr)$values
+  ev <- ev[ev > 1e-10]
+  S_g <- -sum((ev/sum(ev)) * log(ev/sum(ev))) / log(length(ev))
+  
+  # C. Statistics (Ohta's CV-Asymmetry)
+  win <- numeric(n_taxa)
+  for (j in 1:n_taxa) {
+    r_ratio <- P / P[, j]
+    win[j] <- sum(apply(r_ratio, 2, function(x) sd(x)/mean(x)) < 
+                  apply(1/r_ratio, 2, function(x) sd(x)/mean(x)), na.rm=TRUE)
+  }
+  S_s <- 1 - (max(win) / (n_taxa - 1))
+  
+  # D. Basis Scaling Factor
+  best_anchor_idx <- which.max(win)
+  estimated_scale <- 1 / P[, best_anchor_idx]
+  
+  chaos_idx <- (S_p + S_g + S_s) / 3
+  cat(sprintf("\n[ITAGAKI V8] Chaos: %.4f | Anchor: %s\n", 
+              chaos_idx, colnames(P)[best_anchor_idx]))
+  
+  return(list(Chaos_Index = chaos_idx, Estimated_Scale = estimated_scale))
+}
+
+# --- 2. GEOMETRIC MAPPING: RECOVERY & ILR ---
+apply_itagaki_egozcue <- function(Dataset, res_v8) {
+  if(res_v8$Chaos_Index > 0.7) {
+    warning("High Chaos detected. Basis recovery may be unstable.")
+  }
+  
+  # Rescale to Absolute Basis
+  abs_data <- as.matrix(Dataset) * res_v8$Estimated_Scale
+  
+  # ILR Transformation (Orthonormal)
+  D <- ncol(abs_data); N <- nrow(abs_data)
+  L <- log(abs_data + 1e-20)
+  ilr_data <- matrix(0, nrow=N, ncol=D-1)
+  for (i in 1:(D-1)) {
+    weight <- sqrt(i / (i + 1))
+    sub_mean <- if(i == 1) L[, 1] else rowMeans(as.matrix(L[, 1:i]))
+    ilr_data[, i] <- weight * (L[, i + 1] - sub_mean)
+  }
+  colnames(ilr_data) <- paste0("ILR_Dim_", 1:(D-1))
+  return(ilr_data)
+}
+
+# --- 3. VISUALIZATION MODULE ---
+visualize_absolute_truth <- function(Dataset, ilr_data, chaos_idx) {
+  # Traditional Relative PCA (CLR)
+  clr_data <- log(Dataset + 1e-20) - rowMeans(log(Dataset + 1e-20))
+  pca_rel  <- prcomp(clr_data)
+  
+  # Absolute-Scale PCA
+  pca_abs  <- prcomp(ilr_data)
+  
+  par(mfrow=c(1,2), mar=c(5,5,4,2))
+  plot(pca_rel$x[,1:2], pch=21, bg="grey", main="RELATIVE PCA\n(The Illusion)", xlab="PC1", ylab="PC2")
+  
+  chaos_col <- colorRampPalette(c("blue", "red"))(100)[pmin(pmax(chaos_idx*100, 1), 100)]
+  plot(pca_abs$x[,1:2], pch=21, bg=chaos_col, cex=1.5, main="ABSOLUTE-SCALE PCA\n(The Reality)", xlab="PC1", ylab="PC2")
+  par(mfrow=c(1,1))
+}
+
+ results_v8 <- diagnose_chaos_v8(Dataset, eff_lib)
+ final_ilr  <- apply_itagaki_egozcue(Dataset, results_v8)
+ visualize_absolute_truth(Dataset, final_ilr, results_v8$Chaos_Index)
+
+
+# --- [USAGE EXAMPLE] ---
+# 1. results_v8 <- diagnose_chaos_v8(Dataset, eff_lib)
+# 2. final_ilr  <- apply_itagaki_egozcue(Dataset, results_v8)
+# 3. visualize_absolute_truth(Dataset, final_ilr, results_v8$Chaos_Index)
